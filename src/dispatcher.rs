@@ -78,8 +78,7 @@ where
 pub struct Dispatcher;
 
 impl Dispatcher {
-    #[allow(clippy::new_ret_no_self)]
-    pub fn new<M, E, R>(size: usize) -> (DispatcherTx<M, E, R>, DispatcherRx<M, E, R>)
+    pub fn bounded<M, E, R>(size: usize) -> (DispatcherTx<M, E, R>, DispatcherRx<M, E, R>)
     where
         M: Unpin,
         E: Unpin,

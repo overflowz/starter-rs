@@ -15,7 +15,7 @@ fn root_effect(store: &mut Store, action: &Action, responder: &crossfire::MAsync
 
 #[tokio::main]
 async fn main() {
-    let (tx, rx) = Dispatcher::new::<Action, EnablingConditionErr, Response>(u16::MAX as usize);
+    let (tx, rx) = Dispatcher::bounded::<Action, EnablingConditionErr, Response>(u16::MAX as usize);
 
     let mut store = StoreBuilder::new(State::default(), root_reducer, root_effect)
         .with_context(tx.clone())
