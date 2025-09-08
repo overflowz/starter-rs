@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 #[derive(Debug)]
 pub enum DispatchResult<E, R> {
     SendChannelClosed,
@@ -27,7 +25,6 @@ where
     M: Unpin,
 {
     tx: crossfire::MAsyncTx<Message<M, E, R>>,
-    _err: PhantomData<E>,
 }
 
 impl<T, E, R> Clone for DispatcherTx<T, E, R>
@@ -38,7 +35,6 @@ where
     fn clone(&self) -> Self {
         Self {
             tx: self.tx.clone(),
-            _err: PhantomData,
         }
     }
 }
@@ -90,12 +86,6 @@ impl Dispatcher {
     {
         let (tx, rx) = crossfire::mpmc::bounded_async(size);
 
-        (
-            DispatcherTx {
-                tx,
-                _err: PhantomData,
-            },
-            DispatcherRx { rx },
-        )
+        (DispatcherTx { tx }, DispatcherRx { rx })
     }
 }
