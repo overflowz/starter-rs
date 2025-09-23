@@ -1,5 +1,14 @@
 #[derive(Debug)]
-pub enum DispatchResult<E, R> {
+#[must_use]
+pub enum DispatchResult<E> {
+    SendChannelClosed,
+    EnablingConditionErr(E),
+    Sent,
+}
+
+#[derive(Debug)]
+#[must_use]
+pub enum SendResult<E, R> {
     SendChannelClosed,
     NoResponse,
     EnablingConditionErr(E),
@@ -7,7 +16,11 @@ pub enum DispatchResult<E, R> {
 }
 
 pub enum Message<M, E, R> {
-    Action(M, crossfire::AsyncTx<E>, crossfire::MAsyncTx<R>),
+    Action(
+        M,
+        Option<crossfire::AsyncTx<E>>,
+        Option<crossfire::MAsyncTx<R>>,
+    ),
 }
 
 pub struct DispatcherRx<M, E, R> {
@@ -45,7 +58,7 @@ where
     E: Unpin + Send + 'static,
     R: Unpin + Send + 'static,
 {
-    pub async fn dispatch<A>(&self, message: A) -> DispatchResult<E, R>
+    pub async fn send<A>(&self, message: A) -> SendResult<E, R>
     where
         A: Into<M>,
     {
@@ -56,22 +69,38 @@ where
 
         if self
             .tx
-            .send(Message::Action(message.into(), tx1, tx2))
+            .send(Message::Action(message.into(), Some(tx1), Some(tx2)))
+            .await
+            .is_err()
+        {
+            return SendResult::SendChannelClosed;
+        }
+
+        if let Ok(res) = rx1.recv().await {
+            return SendResult::EnablingConditionErr::<E, R>(res);
+        }
+
+        if let Ok(res) = rx2.recv().await {
+            return SendResult::Response::<E, R>(res);
+        }
+
+        SendResult::NoResponse
+    }
+
+    pub async fn dispatch<A>(&self, action: A) -> DispatchResult<E>
+    where
+        A: Into<M>,
+    {
+        if self
+            .tx
+            .send(Message::Action(action.into(), None, None))
             .await
             .is_err()
         {
             return DispatchResult::SendChannelClosed;
         }
 
-        if let Ok(res) = rx1.recv().await {
-            return DispatchResult::EnablingConditionErr::<E, R>(res);
-        }
-
-        if let Ok(res) = rx2.recv().await {
-            return DispatchResult::Response::<E, R>(res);
-        }
-
-        DispatchResult::NoResponse
+        DispatchResult::Sent
     }
 }
 

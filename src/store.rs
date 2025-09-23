@@ -4,7 +4,7 @@ pub type Reducer<State, Action> = fn(&mut State, &Action);
 pub type Effect<State, Action, EnablingConditionErr, Response> = fn(
     &mut Store<State, Action, EnablingConditionErr, Response>,
     &Action,
-    &crossfire::MAsyncTx<Response>,
+    &mut Option<crossfire::MAsyncTx<Response>>,
 );
 
 #[enum_dispatch]
@@ -27,7 +27,7 @@ impl<State, Action, EnablingConditionErr, Response>
     pub fn dispatch<A>(
         &mut self,
         action: A,
-        responder: &crossfire::MAsyncTx<Response>,
+        responder: &mut Option<crossfire::MAsyncTx<Response>>,
     ) -> Result<(), EnablingConditionErr>
     where
         A: EnablingCondition<State, EnablingConditionErr> + Into<Action>,

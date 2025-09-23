@@ -30,7 +30,7 @@ pub fn dummy_reducer(_state: &mut State, _action: &Action) {}
 pub fn dummy_effect(
     _store: &mut Store,
     _action: &Action,
-    _responder: &crossfire::MAsyncTx<Response>,
+    _responder: &mut Option<crossfire::MAsyncTx<Response>>,
 ) {
 }
 

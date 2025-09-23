@@ -9,7 +9,11 @@ fn root_reducer(state: &mut State, action: &Action) {
     chain_reducers!(state, action, modules::dummy::dummy_reducer);
 }
 
-fn root_effect(store: &mut Store, action: &Action, responder: &crossfire::MAsyncTx<Response>) {
+fn root_effect(
+    store: &mut Store,
+    action: &Action,
+    responder: &mut Option<crossfire::MAsyncTx<Response>>,
+) {
     chain_effects!(store, action, responder, modules::dummy::dummy_effect);
 }
 
@@ -23,8 +27,10 @@ async fn main() {
 
     while let Some(msg) = rx.recv().await {
         match msg {
-            Message::Action(action, tx1, tx2) => {
-                if let Err(err) = store.dispatch(action, &tx2) {
+            Message::Action(action, tx1, mut tx2) => {
+                if let Err(err) = store.dispatch(action, &mut tx2)
+                    && let Some(tx1) = tx1
+                {
                     let _ = tx1.send(err).await;
                 }
             }
