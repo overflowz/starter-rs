@@ -1,3 +1,5 @@
+use tokio::sync::oneshot;
+
 use starter_rs::{
     Action, EnablingConditionErr, Response, State, Store, StoreBuilder, chain_effects,
     chain_reducers,
@@ -12,7 +14,7 @@ fn root_reducer(state: &mut State, action: &Action) {
 fn root_effect(
     store: &mut Store,
     action: &Action,
-    responder: &mut Option<crossfire::MAsyncTx<Response>>,
+    responder: &mut Option<oneshot::Sender<Result<Response, EnablingConditionErr>>>,
 ) {
     chain_effects!(store, action, responder, modules::dummy::dummy_effect);
 }
@@ -27,11 +29,11 @@ async fn main() {
 
     while let Some(msg) = rx.recv().await {
         match msg {
-            Message::Action(action, tx1, mut tx2) => {
-                if let Err(err) = store.dispatch(action, &mut tx2)
-                    && let Some(tx1) = tx1
+            Message::Action(action, mut reply) => {
+                if let Err(err) = store.dispatch(action, &mut reply)
+                    && let Some(tx) = reply
                 {
-                    let _ = tx1.send(err).await;
+                    let _ = tx.send(Err(err));
                 }
             }
         }

@@ -1,10 +1,11 @@
 use enum_dispatch::enum_dispatch;
+use tokio::sync::oneshot;
 
 pub type Reducer<State, Action> = fn(&mut State, &Action);
 pub type Effect<State, Action, EnablingConditionErr, Response> = fn(
     &mut Store<State, Action, EnablingConditionErr, Response>,
     &Action,
-    &mut Option<crossfire::MAsyncTx<Response>>,
+    &mut Option<oneshot::Sender<Result<Response, EnablingConditionErr>>>,
 );
 
 #[enum_dispatch]
@@ -27,7 +28,7 @@ impl<State, Action, EnablingConditionErr, Response>
     pub fn dispatch<A>(
         &mut self,
         action: A,
-        responder: &mut Option<crossfire::MAsyncTx<Response>>,
+        responder: &mut Option<oneshot::Sender<Result<Response, EnablingConditionErr>>>,
     ) -> Result<(), EnablingConditionErr>
     where
         A: EnablingCondition<State, EnablingConditionErr> + Into<Action>,

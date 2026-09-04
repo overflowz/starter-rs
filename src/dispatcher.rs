@@ -1,3 +1,5 @@
+use tokio::sync::oneshot;
+
 #[derive(Debug)]
 #[must_use]
 pub enum DispatchResult<E> {
@@ -16,11 +18,7 @@ pub enum SendResult<E, R> {
 }
 
 pub enum Message<M, E, R> {
-    Action(
-        M,
-        Option<crossfire::AsyncTx<E>>,
-        Option<crossfire::MAsyncTx<R>>,
-    ),
+    Action(M, Option<oneshot::Sender<Result<R, E>>>),
 }
 
 pub struct DispatcherRx<M, E, R> {
@@ -62,29 +60,22 @@ where
     where
         A: Into<M>,
     {
-        let ((tx1, rx1), (tx2, rx2)) = (
-            crossfire::spsc::bounded_async::<E>(1),
-            crossfire::mpsc::bounded_async::<R>(1),
-        );
+        let (tx, rx) = oneshot::channel::<Result<R, E>>();
 
         if self
             .tx
-            .send(Message::Action(message.into(), Some(tx1), Some(tx2)))
+            .send(Message::Action(message.into(), Some(tx)))
             .await
             .is_err()
         {
             return SendResult::SendChannelClosed;
         }
 
-        if let Ok(res) = rx1.recv().await {
-            return SendResult::EnablingConditionErr::<E, R>(res);
+        match rx.await {
+            Ok(Ok(response)) => SendResult::Response(response),
+            Ok(Err(err)) => SendResult::EnablingConditionErr(err),
+            Err(_) => SendResult::NoResponse,
         }
-
-        if let Ok(res) = rx2.recv().await {
-            return SendResult::Response::<E, R>(res);
-        }
-
-        SendResult::NoResponse
     }
 
     pub async fn dispatch<A>(&self, action: A) -> DispatchResult<E>
@@ -93,7 +84,7 @@ where
     {
         if self
             .tx
-            .send(Message::Action(action.into(), None, None))
+            .send(Message::Action(action.into(), None))
             .await
             .is_err()
         {
@@ -117,3 +108,4 @@ impl Dispatcher {
         (DispatcherTx { tx }, DispatcherRx { rx })
     }
 }
+
