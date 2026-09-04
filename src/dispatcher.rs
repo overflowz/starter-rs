@@ -2,14 +2,6 @@ use tokio::sync::oneshot;
 
 #[derive(Debug)]
 #[must_use]
-pub enum DispatchResult<E> {
-    SendChannelClosed,
-    EnablingConditionErr(E),
-    Sent,
-}
-
-#[derive(Debug)]
-#[must_use]
 pub enum SendResult<E, R> {
     SendChannelClosed,
     NoResponse,
@@ -78,20 +70,17 @@ where
         }
     }
 
-    pub async fn dispatch<A>(&self, action: A) -> DispatchResult<E>
+    /// Fire-and-forget. Awaits only while the mailbox is full (backpressure).
+    /// Returns `false` when the store loop is gone (mailbox closed).
+    #[must_use = "the action is silently dropped if the store loop is gone"]
+    pub async fn dispatch<A>(&self, action: A) -> bool
     where
         A: Into<M>,
     {
-        if self
-            .tx
+        self.tx
             .send(Message::Action(action.into(), None))
             .await
-            .is_err()
-        {
-            return DispatchResult::SendChannelClosed;
-        }
-
-        DispatchResult::Sent
+            .is_ok()
     }
 }
 
@@ -108,4 +97,3 @@ impl Dispatcher {
         (DispatcherTx { tx }, DispatcherRx { rx })
     }
 }
-
