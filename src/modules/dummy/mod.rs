@@ -35,3 +35,4 @@ pub fn dummy_effect(
 }
 
 impl EnablingCondition<State, EnablingConditionErr> for DummyAction {}
+
