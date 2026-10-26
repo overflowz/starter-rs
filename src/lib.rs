@@ -44,5 +44,10 @@ pub enum Action {
     Dummy(modules::dummy::DummyAction),
 }
 
-pub type Store = store::Store<State, Action, EnablingConditionErr, Response>;
-pub type StoreBuilder = store::StoreBuilder<State, Action, EnablingConditionErr, Response>;
+pub struct Context {
+    pub runtime: tokio::runtime::Handle,
+    pub tx: dispatcher::DispatcherTx<Action, EnablingConditionErr, Response>,
+}
+
+pub type Store = store::Store<State, Action, EnablingConditionErr, Response, Context>;
+pub type StoreBuilder = store::StoreBuilder<State, Action, EnablingConditionErr, Response, Context>;

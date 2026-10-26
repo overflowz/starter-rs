@@ -1,7 +1,7 @@
 use tokio::sync::oneshot;
 
 use starter_rs::{
-    Action, EnablingConditionErr, Response, State, Store, StoreBuilder, chain_effects,
+    Action, Context, EnablingConditionErr, Response, State, Store, StoreBuilder, chain_effects,
     chain_reducers,
     dispatcher::{Dispatcher, DispatcherRx, Message},
     modules,
@@ -44,10 +44,16 @@ async fn main() {
         std::thread::Builder::new()
             .name("store".to_owned())
             .spawn(move || {
-                let store = StoreBuilder::new(State::default(), root_reducer, root_effect)
-                    .with_context(runtime_handle)
-                    .with_context(tx)
-                    .build();
+                let store = StoreBuilder::new(
+                    State::default(),
+                    root_reducer,
+                    root_effect,
+                    Context {
+                        runtime: runtime_handle,
+                        tx,
+                    },
+                )
+                .build();
 
                 main_loop(rx, store)
             })
@@ -57,4 +63,3 @@ async fn main() {
     // the core waits forever; the process lives until it is terminated.
     std::future::pending::<()>().await;
 }
-

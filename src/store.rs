@@ -2,8 +2,8 @@ use enum_dispatch::enum_dispatch;
 use tokio::sync::oneshot;
 
 pub type Reducer<State, Action> = fn(&mut State, &Action);
-pub type Effect<State, Action, EnablingConditionErr, Response> = fn(
-    &mut Store<State, Action, EnablingConditionErr, Response>,
+pub type Effect<State, Action, EnablingConditionErr, Response, Context = ()> = fn(
+    &mut Store<State, Action, EnablingConditionErr, Response, Context>,
     &Action,
     &mut Option<oneshot::Sender<Result<Response, EnablingConditionErr>>>,
 );
@@ -15,16 +15,30 @@ pub trait EnablingCondition<State, EnablingConditionErr> {
     }
 }
 
-pub struct Store<State, Action, EnablingConditionErr, Response> {
+pub struct Store<State, Action, EnablingConditionErr, Response, Context = ()> {
     state: State,
     reducer: Reducer<State, Action>,
-    effect: Effect<State, Action, EnablingConditionErr, Response>,
-    contexts: anymap3::AnyMap,
+    effect: Effect<State, Action, EnablingConditionErr, Response, Context>,
+    context: Context,
 }
 
-impl<State, Action, EnablingConditionErr, Response>
-    Store<State, Action, EnablingConditionErr, Response>
+impl<State, Action, EnablingConditionErr, Response, Context>
+    Store<State, Action, EnablingConditionErr, Response, Context>
 {
+    pub fn new(
+        state: State,
+        reducer: Reducer<State, Action>,
+        effect: Effect<State, Action, EnablingConditionErr, Response, Context>,
+        context: Context,
+    ) -> Self {
+        Self {
+            state,
+            reducer,
+            effect,
+            context,
+        }
+    }
+
     pub fn dispatch<A>(
         &mut self,
         action: A,
@@ -49,51 +63,46 @@ impl<State, Action, EnablingConditionErr, Response>
     }
 
     #[inline(always)]
-    pub fn context<T>(&mut self) -> Option<&mut T>
-    where
-        T: 'static,
-    {
-        self.contexts.get_mut()
+    pub fn context(&self) -> &Context {
+        &self.context
+    }
+
+    #[inline(always)]
+    pub fn context_mut(&mut self) -> &mut Context {
+        &mut self.context
     }
 }
 
-pub struct StoreBuilder<State, Action, EnablingConditionErr, Response> {
+pub struct StoreBuilder<State, Action, EnablingConditionErr, Response, Context = ()> {
     state: State,
     reducer: Reducer<State, Action>,
-    effect: Effect<State, Action, EnablingConditionErr, Response>,
-    contexts: anymap3::AnyMap,
+    effect: Effect<State, Action, EnablingConditionErr, Response, Context>,
+    context: Context,
 }
 
-impl<State, Action, EnablingConditionErr, Response>
-    StoreBuilder<State, Action, EnablingConditionErr, Response>
+impl<State, Action, EnablingConditionErr, Response, Context>
+    StoreBuilder<State, Action, EnablingConditionErr, Response, Context>
 {
     pub fn new(
         state: State,
         reducer: Reducer<State, Action>,
-        effect: Effect<State, Action, EnablingConditionErr, Response>,
+        effect: Effect<State, Action, EnablingConditionErr, Response, Context>,
+        context: Context,
     ) -> Self {
         Self {
             state,
             reducer,
             effect,
-            contexts: anymap3::AnyMap::new(),
+            context,
         }
     }
 
-    pub fn with_context<C>(mut self, cx: C) -> Self
-    where
-        C: 'static,
-    {
-        self.contexts.insert(cx);
-        self
-    }
-
-    pub fn build(self) -> Store<State, Action, EnablingConditionErr, Response> {
+    pub fn build(self) -> Store<State, Action, EnablingConditionErr, Response, Context> {
         Store {
             state: self.state,
             reducer: self.reducer,
             effect: self.effect,
-            contexts: self.contexts,
+            context: self.context,
         }
     }
 }
