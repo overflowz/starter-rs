@@ -1,27 +1,16 @@
-use tokio::sync::oneshot;
-
-#[derive(Debug)]
-#[must_use]
-pub enum SendResult<E, R> {
-    SendChannelClosed,
-    NoResponse,
-    EnablingConditionErr(E),
-    Response(R),
+pub enum Message<M> {
+    Action(M),
 }
 
-pub enum Message<M, E, R> {
-    Action(M, Option<oneshot::Sender<Result<R, E>>>),
-}
-
-pub struct DispatcherTx<M, E, R>
+pub struct DispatcherTx<M>
 where
     M: Unpin,
 {
-    tx: crossfire::MAsyncTx<Message<M, E, R>>,
-    tx_blocking: crossfire::MTx<Message<M, E, R>>,
+    tx: crossfire::MAsyncTx<Message<M>>,
+    tx_blocking: crossfire::MTx<Message<M>>,
 }
 
-impl<M, E, R> Clone for DispatcherTx<M, E, R>
+impl<M> Clone for DispatcherTx<M>
 where
     M: Unpin,
 {
@@ -33,65 +22,16 @@ where
     }
 }
 
-impl<M, E, R> DispatcherTx<M, E, R>
+impl<M> DispatcherTx<M>
 where
     M: Unpin + Send + 'static,
-    E: Unpin + Send + 'static,
-    R: Unpin + Send + 'static,
 {
-    /// RPC round trip: awaits the reply channel.
-    pub async fn send<A>(&self, message: A) -> SendResult<E, R>
-    where
-        A: Into<M>,
-    {
-        let (rtx, rrx) = oneshot::channel::<Result<R, E>>();
-
-        if self
-            .tx
-            .send(Message::Action(message.into(), Some(rtx)))
-            .await
-            .is_err()
-        {
-            return SendResult::SendChannelClosed;
-        }
-
-        match rrx.await {
-            Ok(Ok(response)) => SendResult::Response(response),
-            Ok(Err(err)) => SendResult::EnablingConditionErr(err),
-            Err(_) => SendResult::NoResponse,
-        }
-    }
-
     #[must_use = "the action is silently dropped if the store loop is gone"]
     pub async fn dispatch<A>(&self, action: A) -> bool
     where
         A: Into<M>,
     {
-        self.tx
-            .send(Message::Action(action.into(), None))
-            .await
-            .is_ok()
-    }
-
-    pub fn send_blocking<A>(&self, message: A) -> SendResult<E, R>
-    where
-        A: Into<M>,
-    {
-        let (rtx, rrx) = oneshot::channel::<Result<R, E>>();
-
-        if self
-            .tx_blocking
-            .send(Message::Action(message.into(), Some(rtx)))
-            .is_err()
-        {
-            return SendResult::SendChannelClosed;
-        }
-
-        match rrx.blocking_recv() {
-            Ok(Ok(response)) => SendResult::Response(response),
-            Ok(Err(err)) => SendResult::EnablingConditionErr(err),
-            Err(_) => SendResult::NoResponse,
-        }
+        self.tx.send(Message::Action(action.into())).await.is_ok()
     }
 
     #[must_use = "the action is silently dropped if the store loop is gone"]
@@ -100,22 +40,22 @@ where
         A: Into<M>,
     {
         self.tx_blocking
-            .send(Message::Action(action.into(), None))
+            .send(Message::Action(action.into()))
             .is_ok()
     }
 }
 
-pub struct DispatcherRx<M, E, R> {
-    rx: crossfire::MAsyncRx<Message<M, E, R>>,
-    rx_blocking: crossfire::MRx<Message<M, E, R>>,
+pub struct DispatcherRx<M> {
+    rx: crossfire::MAsyncRx<Message<M>>,
+    rx_blocking: crossfire::MRx<Message<M>>,
 }
 
-impl<M, E, R> DispatcherRx<M, E, R> {
-    pub async fn recv(&self) -> Option<Message<M, E, R>> {
+impl<M> DispatcherRx<M> {
+    pub async fn recv(&self) -> Option<Message<M>> {
         self.rx.recv().await.ok()
     }
 
-    pub fn recv_blocking(&self) -> Option<Message<M, E, R>> {
+    pub fn recv_blocking(&self) -> Option<Message<M>> {
         self.rx_blocking.recv().ok()
     }
 }
@@ -123,10 +63,9 @@ impl<M, E, R> DispatcherRx<M, E, R> {
 pub struct Dispatcher;
 
 impl Dispatcher {
-    pub fn bounded<M, E, R>(size: usize) -> (DispatcherTx<M, E, R>, DispatcherRx<M, E, R>)
+    pub fn bounded<M>(size: usize) -> (DispatcherTx<M>, DispatcherRx<M>)
     where
         M: Unpin,
-        E: Unpin,
     {
         let (tx, rx) = crossfire::mpmc::bounded_async(size);
 
@@ -142,4 +81,3 @@ impl Dispatcher {
         )
     }
 }
-

@@ -1,12 +1,9 @@
 use enum_dispatch::enum_dispatch;
-use tokio::sync::oneshot;
 
 pub type Reducer<State, Action> = fn(&mut State, &Action);
-pub type Effect<State, Action, EnablingConditionErr, Response, Context = ()> = fn(
-    &mut Store<State, Action, EnablingConditionErr, Response, Context>,
-    &Action,
-    &mut Option<oneshot::Sender<Result<Response, EnablingConditionErr>>>,
-);
+
+pub type Effect<State, Action, EnablingConditionErr, Context = ()> =
+    fn(&mut Store<State, Action, EnablingConditionErr, Context>, &Action);
 
 #[enum_dispatch]
 pub trait EnablingCondition<State, EnablingConditionErr> {
@@ -15,20 +12,20 @@ pub trait EnablingCondition<State, EnablingConditionErr> {
     }
 }
 
-pub struct Store<State, Action, EnablingConditionErr, Response, Context = ()> {
+pub struct Store<State, Action, EnablingConditionErr, Context = ()> {
     state: State,
     reducer: Reducer<State, Action>,
-    effect: Effect<State, Action, EnablingConditionErr, Response, Context>,
+    effect: Effect<State, Action, EnablingConditionErr, Context>,
     context: Context,
 }
 
-impl<State, Action, EnablingConditionErr, Response, Context>
-    Store<State, Action, EnablingConditionErr, Response, Context>
+impl<State, Action, EnablingConditionErr, Context>
+    Store<State, Action, EnablingConditionErr, Context>
 {
     pub fn new(
         state: State,
         reducer: Reducer<State, Action>,
-        effect: Effect<State, Action, EnablingConditionErr, Response, Context>,
+        effect: Effect<State, Action, EnablingConditionErr, Context>,
         context: Context,
     ) -> Self {
         Self {
@@ -39,11 +36,7 @@ impl<State, Action, EnablingConditionErr, Response, Context>
         }
     }
 
-    pub fn dispatch<A>(
-        &mut self,
-        action: A,
-        responder: &mut Option<oneshot::Sender<Result<Response, EnablingConditionErr>>>,
-    ) -> Result<(), EnablingConditionErr>
+    pub fn dispatch<A>(&mut self, action: A) -> Result<(), EnablingConditionErr>
     where
         A: EnablingCondition<State, EnablingConditionErr> + Into<Action>,
     {
@@ -52,7 +45,7 @@ impl<State, Action, EnablingConditionErr, Response, Context>
         let action = action.into();
 
         (self.reducer)(&mut self.state, &action);
-        (self.effect)(self, &action, responder);
+        (self.effect)(self, &action);
 
         Ok(())
     }
@@ -73,20 +66,20 @@ impl<State, Action, EnablingConditionErr, Response, Context>
     }
 }
 
-pub struct StoreBuilder<State, Action, EnablingConditionErr, Response, Context = ()> {
+pub struct StoreBuilder<State, Action, EnablingConditionErr, Context = ()> {
     state: State,
     reducer: Reducer<State, Action>,
-    effect: Effect<State, Action, EnablingConditionErr, Response, Context>,
+    effect: Effect<State, Action, EnablingConditionErr, Context>,
     context: Context,
 }
 
-impl<State, Action, EnablingConditionErr, Response, Context>
-    StoreBuilder<State, Action, EnablingConditionErr, Response, Context>
+impl<State, Action, EnablingConditionErr, Context>
+    StoreBuilder<State, Action, EnablingConditionErr, Context>
 {
     pub fn new(
         state: State,
         reducer: Reducer<State, Action>,
-        effect: Effect<State, Action, EnablingConditionErr, Response, Context>,
+        effect: Effect<State, Action, EnablingConditionErr, Context>,
         context: Context,
     ) -> Self {
         Self {
@@ -97,7 +90,7 @@ impl<State, Action, EnablingConditionErr, Response, Context>
         }
     }
 
-    pub fn build(self) -> Store<State, Action, EnablingConditionErr, Response, Context> {
+    pub fn build(self) -> Store<State, Action, EnablingConditionErr, Context> {
         Store {
             state: self.state,
             reducer: self.reducer,

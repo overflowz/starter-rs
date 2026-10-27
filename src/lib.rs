@@ -16,9 +16,9 @@ macro_rules! chain_reducers {
 
 #[macro_export]
 macro_rules! chain_effects {
-    ($store: ident, $action: ident, $responder: ident) => {};
-    ($store: ident, $action: ident, $responder: ident, $($handler: expr),+) => {
-        $( $handler($store, $action, $responder); )+
+    ($store: ident, $action: ident) => {};
+    ($store: ident, $action: ident, $($handler: expr),+) => {
+        $( $handler($store, $action); )+
     };
 }
 
@@ -26,11 +26,6 @@ macro_rules! chain_effects {
 pub enum EnablingConditionErr {
     #[error("dummy error: {0}")]
     Dummy(#[from] modules::dummy::DummyEnablingConditionErr),
-}
-
-#[derive(Debug, derive_more::From)]
-pub enum Response {
-    Dummy(Result<modules::dummy::DummyResponseOk, modules::dummy::DummyResponseErr>),
 }
 
 #[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
@@ -46,8 +41,8 @@ pub enum Action {
 
 pub struct Context {
     pub runtime: tokio::runtime::Handle,
-    pub tx: dispatcher::DispatcherTx<Action, EnablingConditionErr, Response>,
+    pub tx: dispatcher::DispatcherTx<Action>,
 }
 
-pub type Store = store::Store<State, Action, EnablingConditionErr, Response, Context>;
-pub type StoreBuilder = store::StoreBuilder<State, Action, EnablingConditionErr, Response, Context>;
+pub type Store = store::Store<State, Action, EnablingConditionErr, Context>;
+pub type StoreBuilder = store::StoreBuilder<State, Action, EnablingConditionErr, Context>;
