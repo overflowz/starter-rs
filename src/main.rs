@@ -26,6 +26,8 @@ fn main_loop(rx: DispatcherRx<Action>, mut store: Store) {
 
 #[tokio::main]
 async fn main() {
+    crossfire::detect_backoff_cfg();
+
     let (tx, rx) = Dispatcher::bounded::<Action>(u16::MAX as usize);
 
     let _main_loop_handle = {

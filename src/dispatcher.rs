@@ -1,18 +1,21 @@
+use crossfire::mpmc::Array;
+use crossfire::{MAsyncRx, MAsyncTx, MRx, MTx};
+
 pub enum Message<M> {
     Action(M),
 }
 
 pub struct DispatcherTx<M>
 where
-    M: Unpin,
+    M: Unpin + Send + 'static,
 {
-    tx: crossfire::MAsyncTx<Message<M>>,
-    tx_blocking: crossfire::MTx<Message<M>>,
+    tx: MAsyncTx<Array<Message<M>>>,
+    tx_blocking: MTx<Array<Message<M>>>,
 }
 
 impl<M> Clone for DispatcherTx<M>
 where
-    M: Unpin,
+    M: Unpin + Send + 'static,
 {
     fn clone(&self) -> Self {
         Self {
@@ -45,12 +48,18 @@ where
     }
 }
 
-pub struct DispatcherRx<M> {
-    rx: crossfire::MAsyncRx<Message<M>>,
-    rx_blocking: crossfire::MRx<Message<M>>,
+pub struct DispatcherRx<M>
+where
+    M: Unpin + Send + 'static,
+{
+    rx: MAsyncRx<Array<Message<M>>>,
+    rx_blocking: MRx<Array<Message<M>>>,
 }
 
-impl<M> DispatcherRx<M> {
+impl<M> DispatcherRx<M>
+where
+    M: Unpin + Send + 'static,
+{
     pub async fn recv(&self) -> Option<Message<M>> {
         self.rx.recv().await.ok()
     }
@@ -65,9 +74,9 @@ pub struct Dispatcher;
 impl Dispatcher {
     pub fn bounded<M>(size: usize) -> (DispatcherTx<M>, DispatcherRx<M>)
     where
-        M: Unpin,
+        M: Unpin + Send + 'static,
     {
-        let (tx, rx) = crossfire::mpmc::bounded_async(size);
+        let (tx, rx) = crossfire::mpmc::bounded_async::<Message<M>>(size);
 
         (
             DispatcherTx {
