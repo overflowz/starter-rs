@@ -1,9 +1,11 @@
 use enum_dispatch::enum_dispatch;
 
+use crate::reply::ReplySender;
+
 pub type Reducer<State, Action> = fn(&mut State, &Action);
 
 pub type Effect<State, Action, EnablingConditionErr, Context = ()> =
-    fn(&mut Store<State, Action, EnablingConditionErr, Context>, &Action);
+    fn(&mut Store<State, Action, EnablingConditionErr, Context>, &Action, &mut Option<ReplySender>);
 
 #[enum_dispatch]
 pub trait EnablingCondition<State, EnablingConditionErr> {
@@ -36,16 +38,19 @@ impl<State, Action, EnablingConditionErr, Context>
         }
     }
 
-    pub fn dispatch<A>(&mut self, action: A) -> Result<(), EnablingConditionErr>
+    #[inline]
+    pub fn dispatch(
+        &mut self,
+        action: &Action,
+        reply: &mut Option<ReplySender>,
+    ) -> Result<(), EnablingConditionErr>
     where
-        A: EnablingCondition<State, EnablingConditionErr> + Into<Action>,
+        Action: EnablingCondition<State, EnablingConditionErr>,
     {
         action.is_enabled(&self.state)?;
 
-        let action = action.into();
-
-        (self.reducer)(&mut self.state, &action);
-        (self.effect)(self, &action);
+        (self.reducer)(&mut self.state, action);
+        (self.effect)(self, action, reply);
 
         Ok(())
     }

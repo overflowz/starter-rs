@@ -1,8 +1,12 @@
 use crossfire::mpmc::Array;
 use crossfire::{MAsyncRx, MAsyncTx, MRx, MTx};
 
-pub enum Message<M> {
-    Action(M),
+use crate::Response;
+use crate::reply::{ReplyError, ReplySender};
+
+pub struct Message<M> {
+    pub action: M,
+    pub reply: Option<ReplySender>,
 }
 
 pub struct DispatcherTx<M>
@@ -29,21 +33,49 @@ impl<M> DispatcherTx<M>
 where
     M: Unpin + Send + 'static,
 {
-    #[must_use = "the action is silently dropped if the store loop is gone"]
     pub async fn dispatch<A>(&self, action: A) -> bool
     where
         A: Into<M>,
     {
-        self.tx.send(Message::Action(action.into())).await.is_ok()
+        self.tx
+            .send(Message {
+                action: action.into(),
+                reply: None,
+            })
+            .await
+            .is_ok()
     }
 
-    #[must_use = "the action is silently dropped if the store loop is gone"]
+    pub async fn request<A>(&self, action: A) -> Result<Response, ReplyError>
+    where
+        A: Into<M>,
+    {
+        let (reply, receiver) = ReplySender::channel();
+
+        if self
+            .tx
+            .send(Message {
+                action: action.into(),
+                reply: Some(reply),
+            })
+            .await
+            .is_err()
+        {
+            return Err(ReplyError::StoreClosed);
+        }
+
+        receiver.recv().await
+    }
+
     pub fn dispatch_blocking<A>(&self, action: A) -> bool
     where
         A: Into<M>,
     {
         self.tx_blocking
-            .send(Message::Action(action.into()))
+            .send(Message {
+                action: action.into(),
+                reply: None,
+            })
             .is_ok()
     }
 }

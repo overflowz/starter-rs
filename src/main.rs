@@ -1,25 +1,31 @@
 use starter_rs::{
-    Action, Context, State, Store, StoreBuilder, chain_effects, chain_reducers,
+    Action, Context, State, Store, StoreBuilder,
     dispatcher::{Dispatcher, DispatcherRx, Message},
     modules,
+    reply::ReplySender,
+    subscriptions,
 };
 
 fn root_reducer(state: &mut State, action: &Action) {
-    chain_reducers!(state, action, modules::dummy::dummy_reducer);
+    subscriptions!(action, state => {
+        Action::Dummy(_) => [modules::dummy::dummy_reducer],
+    });
 }
 
-fn root_effect(store: &mut Store, action: &Action) {
-    chain_effects!(store, action, modules::dummy::dummy_effect);
+fn root_effect(store: &mut Store, action: &Action, reply: &mut Option<ReplySender>) {
+    subscriptions!(action, store, reply => {
+        Action::Dummy(_) => [modules::dummy::dummy_effect],
+    });
 }
 
 fn main_loop(rx: DispatcherRx<Action>, mut store: Store) {
-    while let Some(msg) = rx.recv_blocking() {
-        match msg {
-            Message::Action(action) => {
-                if let Err(err) = store.dispatch(action) {
-                    eprintln!("action rejected: {err}");
-                }
-            }
+    while let Some(Message { action, mut reply }) = rx.recv_blocking() {
+        let Err(err) = store.dispatch(&action, &mut reply) else {
+            continue;
+        };
+
+        if let Some(reply) = reply {
+            let _ = reply.reject(err);
         }
     }
 }

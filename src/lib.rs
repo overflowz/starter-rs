@@ -4,21 +4,44 @@ use crate::store::EnablingCondition;
 
 pub mod dispatcher;
 pub mod modules;
+pub mod reply;
 pub mod store;
 
 #[macro_export]
-macro_rules! chain_reducers {
-    ($state: ident, $action: ident) => {};
-    ($state: ident, $action: ident, $($handler: expr),+) => {
-        $( $handler($state, $action); )+
+macro_rules! subscriptions {
+    (
+        $action:expr, $ctx:expr => {
+            $(
+                $pattern:pat => [ $($handler:path),* $(,)? ]
+            ),* $(,)?
+        }
+    ) => {
+        match $action {
+            $(
+                $pattern => {
+                    $(
+                        $handler($ctx, $action);
+                    )*
+                }
+            ),*
+        }
     };
-}
-
-#[macro_export]
-macro_rules! chain_effects {
-    ($store: ident, $action: ident) => {};
-    ($store: ident, $action: ident, $($handler: expr),+) => {
-        $( $handler($store, $action); )+
+    (
+        $action:expr, $ctx:expr, $reply:expr => {
+            $(
+                $pattern:pat => [ $($handler:path),* $(,)? ]
+            ),* $(,)?
+        }
+    ) => {
+        match $action {
+            $(
+                $pattern => {
+                    $(
+                        $handler($ctx, $action, &mut *$reply);
+                    )*
+                }
+            ),*
+        }
     };
 }
 
@@ -33,10 +56,21 @@ pub struct State {
     pub dummy: modules::dummy::DummyState,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[enum_dispatch(EnablingCondition<State, EnablingConditionErr>)]
 pub enum Action {
     Dummy(modules::dummy::DummyAction),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum Response {
+    Dummy(modules::dummy::DummyResponse),
+}
+
+impl From<modules::dummy::DummyResponse> for Response {
+    fn from(response: modules::dummy::DummyResponse) -> Self {
+        Self::Dummy(response)
+    }
 }
 
 pub struct Context {
